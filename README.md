@@ -96,5 +96,4 @@ A sophisticated email aggregator system built for ReachInbox that synchronizes m
 
 
 
-## 🏗️ System Architecture
 
