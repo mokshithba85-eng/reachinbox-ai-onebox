@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ReachInbox – AI Onebox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .ai-tag { font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px; font-weight: 600; text-transform: capitalize; }
+    .Interested { background-color: #d1fae5; color: #065f46; }
+    .Meeting-Booked { background-color: #bfdbfe; color: #1d4ed8; }
+    .Not-Interested { background-color: #fee2e2; color: #991b1b; }
+    .Spam { background-color: #f3f4f6; color: #4b5563; }
+    .Out-of-Office { background-color: #fef3c7; color: #92400e; }
+    .Uncategorized { background-color: #f3e8ff; color: #6b21a8; }
+    .scrollbar::-webkit-scrollbar { width: 8px; }
+    .scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156,163,175,0.6); border-radius: 10px; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-green-50 via-blue-50 to-purple-100 min-h-screen p-6 font-sans">
+  <div class="max-w-5xl mx-auto bg-white/80 backdrop-blur rounded-2xl shadow-lg p-6 border border-gray-200">
+    <h1 class="text-4xl font-extrabold text-center bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-6">ReachInbox AI Onebox</h1>
+
+    <div class="flex flex-col md:flex-row items-center gap-4 mb-6">
+      <input id="search-input" type="text" placeholder="🔍 Search by subject or body..." class="w-full md:flex-grow px-4 py-3 border rounded-lg" onkeyup="handleSearch()" />
+      <select id="account-filter" class="px-4 py-3 border rounded-lg bg-white" onchange="handleSearch()">
+        <option value="">🌐 All Accounts</option>
+      </select>
+      <button id="refreshBtn" onclick="handleSearch()" class="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Refresh</button>
+    </div>
+
+    <div id="email-list" class="scrollbar overflow-y-auto max-h-[70vh] space-y-4">
+      <div id="loading" class="text-center text-gray-500 mt-6">Loading emails and classifications…</div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "http://localhost:3000/api/emails";
+    const emailList = document.getElementById("email-list");
+    const accountFilter = document.getElementById("account-filter");
+    const searchInput = document.getElementById("search-input");
+    const loadingEl = document.getElementById("loading");
+
+    let emailsCache = [];
+
+    function formatEmailDate(dateString) {
+      try {
+        return new Date(dateString).toLocaleString();
+      } catch (e) {
+        return dateString;
+      }
+    }
+
+    function renderEmailList(emails) {
+      emailList.innerHTML = "";
+      if (!emails || emails.length === 0) {
+        emailList.innerHTML = '<p class="text-center text-gray-500 mt-10">No emails found matching your criteria.</p>';
+        return;
+      }
+
+      for (const email of emails) {
+        const tagClass = (email.aiCategory || "Uncategorized").replace(/\s/g, "-");
+        const el = document.createElement("div");
+        el.className = "p-5 bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition transform hover:-translate-y-1 duration-200";
+        el.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-gray-500">${email.accountId} / ${email.folder || "INBOX"}</span>
+            <span class="ai-tag ${tagClass}">${email.aiCategory || "Uncategorized"}</span>
+          </div>
+          <h2 class="text-lg font-semibold text-gray-900 mb-1 truncate">${escapeHtml(email.subject)}</h2>
+          <p class="text-sm text-gray-600 line-clamp-2">${escapeHtml(email.body)}</p>
+          <div class="text-xs text-gray-400 mt-3">
+            From: <span class="font-medium text-gray-700">${escapeHtml(email.from)}</span> &bull; ${formatEmailDate(email.date)}
+          </div>
+        `;
+        emailList.appendChild(el);
+      }
+    }
+
+    function escapeHtml(unsafe) {
+      if (!unsafe && unsafe !== "") return "";
+      return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function fetchAccounts() {
+      try {
+        const res = await fetch("http://localhost:3000/api/accounts");
+        const accounts = await res.json();
+        accountFilter.innerHTML = '<option value="">🌐 All Accounts</option>';
+        accounts.forEach(a => {
+          const opt = document.createElement("option");
+          opt.value = a.id;
+          opt.textContent = a.label || a.id;
+          accountFilter.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("fetchAccounts error", err);
+      }
+    }
+
+    async function fetchEmails(query = "", accountId = "") {
+      loadingEl.style.display = "block";
+      loadingEl.textContent = "Searching...";
+      try {
+        const url = new URL(API_BASE + "/search");
+        if (query && query.trim().length) url.searchParams.append("q", query);
+        if (accountId) url.searchParams.append("accountId", accountId);
+
+        const res = await fetch(url.toString());
+        const data = await res.json();
+        emailsCache = data.emails || [];
+        renderEmailList(emailsCache);
+      } catch (err) {
+        emailList.innerHTML = '<p class="text-center text-red-500 mt-10">Cannot connect to backend API on port 3000. Ensure server is running.</p>';
+        console.error("fetchEmails error", err);
+      } finally {
+        loadingEl.style.display = "none";
+      }
+    }
+
+    let searchTimeout;
+    function handleSearch() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const query = searchInput.value;
+        const accountId = accountFilter.value;
+        fetchEmails(query, accountId);
+      }, 250);
+    }
+
+    window.onload = async () => {
+      await fetchAccounts();
+      // force an initial search (match_all) so we load existing emails
+      fetchEmails("", accountFilter.value || "");
+    };
+  </script>
+</body>
+</html>
