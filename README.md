@@ -93,6 +93,20 @@ A sophisticated email aggregator system built for ReachInbox that synchronizes m
 - Docker and Docker Compose
 - Git
 - Code editor (VSCode recommended)
+- 
+Commands to execute in command prompt 
+ # 1️ ⃣ Navigate to your project folder
+cd C:\Users\Mokshith B A\reachinbox-onebox
+# 2️ ⃣ Start Docker containers (Elasticsearch & Qdrant)
+docker-compose up -d
+# 3️ ⃣ Verify containers are running
+docker ps
+# 4️ ⃣ Install dependencies
+npm install
+# 5️ ⃣ Run the backend server
+npm run dev
+# 6️ ⃣ Open the frontend (index.html) in your browser
+start index.html
 
 
 
